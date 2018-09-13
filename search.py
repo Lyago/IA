@@ -146,13 +146,31 @@ def breadthFirstSearch(problem):
                 if problem.isGoalState(child_node['STATE']):
                     return getActionSequence(child_node)
                 frontier.push(child_node)
-
     return None
       
 def uniformCostSearch(problem):
-  "Search the node of least total cost first. "
-  "*** YOUR CODE HERE ***"
-  util.raiseNotDefined()
+    "Search the node of least total cost first. "
+    node = getStartNode(problem)
+
+    if problem.isGoalState(node['STATE']): return getActionSequence(node)
+
+    frontier = util.PriorityQueue()
+
+    frontier.push(node, node['PATH-COST'])
+
+    explored = set()
+
+    while frontier.isEmpty() == False:
+        node = frontier.pop()
+        explored.add(node['STATE'])
+
+        for sucessor in problem.getSuccessors(node['STATE']):
+            child_node = getChildNode(sucessor,node)
+            if (child_node['STATE'] not in explored and not any(node[0] == child_node['STATE'] for node in frontier.heap)):
+                if problem.isGoalState(child_node['STATE']):
+                    return getActionSequence(child_node)
+                frontier.push(child_node, child_node['PATH-COST'])
+    return None
 
 def nullHeuristic(state, problem=None):
   """
@@ -162,9 +180,27 @@ def nullHeuristic(state, problem=None):
   return 0
 
 def aStarSearch(problem, heuristic=nullHeuristic):
-  "Search the node that has the lowest combined cost and heuristic first."
-  "*** YOUR CODE HERE ***"
-  util.raiseNotDefined()
+    node = getStartNode(problem)
+
+    if problem.isGoalState(node['STATE']): return getActionSequence(node)
+
+    frontier = util.PriorityQueue()
+
+    frontier.push(node, node['PATH-COST'])
+
+    explored = set()
+
+    while frontier.isEmpty() == False:
+        node = frontier.pop()
+        explored.add(node['STATE'])
+
+        for sucessor in problem.getSuccessors(node['STATE']):
+            child_node = getChildNode(sucessor,node)
+            if (child_node['STATE'] not in explored and not any(node[0] == child_node['STATE'] for node in frontier.heap)):
+                if problem.isGoalState(child_node['STATE']):
+                    return getActionSequence(child_node)
+                frontier.push(child_node, heuristic(child_node['STATE'], problem))
+    return None
     
   
 # Abbreviations
