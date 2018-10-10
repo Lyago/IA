@@ -129,8 +129,12 @@ class MinimaxAgent(MultiAgentSearchAgent):
     return gameState.isLose() or gameState.isWin() or d == 0
 
   def minimax(self, gameState, agentIndex, depth):
-    
-    successorStates = [gameState.generateSuccessor(agentIndex, action) for action in gameState.getLegalActions(agentIndex)]
+    legalActions = gameState.getLegalActions(agentIndex)
+    if agentIndex == 0 and Directions.STOP in legalActions:
+      legalActions.remove(Directions.STOP)
+     
+
+    successorStates = [gameState.generateSuccessor(agentIndex, action) for action in legalActions]
     
     if self.gameOver(gameState, depth):
       return self.evaluationFunction(gameState)
@@ -173,7 +177,7 @@ class MinimaxAgent(MultiAgentSearchAgent):
     successorStates = [gameState.generateSuccessor(0, action) for action in legalActions]
     # valores para cada estado sucessor
     values = [self.minimax(state, 1, depth - 1) for state in successorStates]  
-    print max(values)          
+             
     # retorna a acao com maior valor associado
     return legalActions[values.index(max(values))]
 
@@ -181,18 +185,87 @@ class AlphaBetaAgent(MultiAgentSearchAgent):
   """
     Your minimax agent with alpha-beta pruning (question 3)
   """
+  def gameOver(self, gameState, d):
+    return gameState.isLose() or gameState.isWin() or d == 0
+
+  def alphabeta(self, gameState, agentIndex, depth, alpha, beta):
+    legalActions = gameState.getLegalActions(agentIndex)
+    if agentIndex == 0 and Directions.STOP in legalActions:
+      legalActions.remove(Directions.STOP)
+     
+
+    successorStates = [gameState.generateSuccessor(agentIndex, action) for action in legalActions]
+    
+    if self.gameOver(gameState, depth):
+      return self.evaluationFunction(gameState)
+    else:
+           
+      if agentIndex == 0: # pacman
+        value = float("inf") 
+        for state in successorStates:
+          nextAgent = (agentIndex + 1) % gameState.getNumAgents()
+          value = max(self.alphabeta(state, nextAgent, depth-1, alpha, beta), value)
+          if value >= beta:
+            return value
+          alpha = max(alpha, value)
+        return value
+      else:
+        value = float("inf")
+        for state in successorStates:
+          nextAgent = (agentIndex + 1) % gameState.getNumAgents()
+          value = max(self.alphabeta(state, nextAgent, depth-1, alpha, beta), value)
+          if value <= alpha:
+            return value
+          beta = min(beta, value)
+        return value
 
   def getAction(self, gameState):
     """
       Returns the minimax action using self.depth and self.evaluationFunction
     """
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    depth = gameState.getNumAgents()*self.depth
+
+    legalActions = gameState.getLegalActions(0)
+    legalActions.remove(Directions.STOP)
+    
+    successorStates = [gameState.generateSuccessor(0, action) for action in legalActions]
+    # valores para cada estado sucessor
+    values = [self.alphabeta(state, 1, depth - 1, -1e308, 1e308) for state in successorStates]  
+             
+    # retorna a acao com maior valor associado
+    return legalActions[values.index(max(values))]
+
 
 class ExpectimaxAgent(MultiAgentSearchAgent):
   """
     Your expectimax agent (question 4)
-  """
+  """ 
+  def gameOver(self, gameState, d):
+    return gameState.isLose() or gameState.isWin() or d == 0
+
+  def expectimax(self, gameState, agentIndex,  depth):
+    """
+    Same as minimax, except we do an average of min. 
+    We do an average because the ghost behavior is expected to be 
+    'uniformly at random'. If that's the case, then the expected
+    value of a node's children is the average of their values.
+    """
+    legalActions = gameState.getLegalActions(agentIndex)   
+    successorStates = [gameState.generateSuccessor(agentIndex, action) for action in legalActions]
+
+    if self.gameOver(gameState, depth): # at an end
+      return self.evaluationFunction(gameState)
+    else:
+
+      #o modulo serve para conseguir voltar ao indice 0
+      nextAgent = (agentIndex + 1) % gameState.getNumAgents()
+      values = [self.expectimax(state, nextAgent, depth -1) for state in successorStates]            
+      
+      if agentIndex == 0: # pacman
+        return max(values)
+      else: # fantasma, onde se aplica o expectmax
+        return sum(values)/len(values)
 
   def getAction(self, gameState):
     """
@@ -202,17 +275,98 @@ class ExpectimaxAgent(MultiAgentSearchAgent):
       legal moves.
     """
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    depth = gameState.getNumAgents()*self.depth
+
+    legalActions = gameState.getLegalActions(0)
+    legalActions.remove(Directions.STOP)
+    
+    successorStates = [gameState.generateSuccessor(0, action) for action in legalActions]
+    # valores para cada estado sucessor
+    values = [self.expectimax(state, 1, depth - 1) for state in successorStates]  
+             
+    # retorna a acao com maior valor associado
+    return legalActions[values.index(max(values))]
 
 def betterEvaluationFunction(currentGameState):
   """
     Your extreme ghost-hunting, pellet-nabbing, food-gobbling, unstoppable
     evaluation function (question 5).
-
-    DESCRIPTION: <write something here so we know what you did>
   """
   "*** YOUR CODE HERE ***"
-  util.raiseNotDefined()
+  pos = currentGameState.getPacmanPosition()
+  currentScore = scoreEvaluationFunction(currentGameState)
+
+  if currentGameState.isLose(): 
+    return -float("inf")
+  elif currentGameState.isWin():
+    return float("inf")
+
+  # Distancia das comidas
+  foodList = currentGameState.getFood().asList()
+  manhattanDistanceToClosestFood = min([util.manhattanDistance(pos, food) for food in foodList])
+  distanceToClosestFood = manhattanDistanceToClosestFood
+
+  # Comidas restantes
+  numberOfFoodsLeft = len(foodList)
+  
+  # Distancia dos Fantasmas
+
+  # Separacao entre fantasmas ativos e "assustados". Fantasmas sao considerados assustados sempre que pacman esta sobre o efeito da Power Pellet
+  scaredGhosts, activeGhosts = [], []
+  for ghost in currentGameState.getGhostStates():
+    if not ghost.scaredTimer:
+      activeGhosts.append(ghost)
+    else: 
+      scaredGhosts.append(ghost)
+
+  def getManhattanDistances(ghostList): 
+    return [util.manhattanDistance(pos, ghost.getPosition()) for ghost in ghostList]
+
+  distanceToClosestActiveGhost = distanceToClosestScaredGhost = 0
+
+  if activeGhosts:
+    distanceToClosestActiveGhost = min(getManhattanDistances(activeGhosts))
+  else: 
+    distanceToClosestActiveGhost = float("inf")
+  distanceToClosestActiveGhost = max(distanceToClosestActiveGhost, 5)
+    
+  if scaredGhosts:
+    distanceToClosestScaredGhost = min(getManhattanDistances(scaredGhosts))
+  else:
+    distanceToClosestScaredGhost = 0 # ignora se o fantasma nao esta assustado
+  
+  # Power Pellets restantes
+  numberOfPowerPelletsLeft = len(currentGameState.getCapsules())
+  
+  
+  #Apos determinar todas as caracteristicas revelantes pra funcao de avaliacao, 
+  #multiplicamos cada uma por um coeficiente representando o quanto aquela caracteristica
+  #eh "importante" para o comportamento desejado do pacman 
+
+  #Pontuacao atual - Referencia pras demais caracteristicas.
+  #Distancia ate a comida mais proxima - Um coeficiente negativo faz com que pacman evite se afastar da comida mais proxima.
+  #Quanto menor esse coeficiente, maior a sera a prioridade de pacman em se aproximar as comidas
+  
+  #Distancia ate o fantasma ativo mais proximo(Mais precisamente, seu inverso) - Um coeficiente negativo ao inverso dessa 
+  #caracteristica faz com que pacman evite se aproximar do fantasma ativo mais proximo. Quanto menor esse coeficiente, maior
+  #sera a prioridade de pacman em evitar os fantasmas
+  
+  #Distancia ate o fantasma assustado mais proximo - Um coeficiente negativo faz com que pacman evite se afastar do fantasma
+  #assustado mais proximo. Quanto menor esse coeficiente, maior sera a prioridade de pacman em cacar fantasmas assustados
+  
+  #Numero de Power Pellets restantes - Um coeficiente negativo faz com que pacman evite deixar uma Power Pellet sem ser comida.
+  #Quanto menor esse coeficiente, maior sera a prioridade de pacman em comer as Power Pellets se tiver chance.
+  
+  #Numero de comidas restantes - Um coeficiente negativo faz com que pacman evite deixar uma comida sem ser comida. Quanto menor
+  #esse coeficiente, maior sera a prioridade de pacman em comer as comidas se tiver chance
+
+  score = 1    * currentScore + \
+          -1.5 * distanceToClosestFood + \
+          -2    * (1./distanceToClosestActiveGhost) + \
+          -2    * distanceToClosestScaredGhost + \
+          -20 * numberOfPowerPelletsLeft + \
+          -4    * numberOfFoodsLeft
+  return score
 
 # Abbreviation
 better = betterEvaluationFunction
